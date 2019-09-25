@@ -86,6 +86,139 @@ void VideoChannel::initVideoEncoder(int width, int height, int fps, int bitrate)
 }
 
 void VideoChannel::encodeData(int8_t *data) {
-    //TODO
+    pthread_mutex_lock(&mutex);
+    //y数据
+    memcpy(pic_in->img.plane[0],data,y_len);
+    for(int i = 0;i<uv_len;++i){
+        //u 数据 参考yuv彩色表
+        *(pic_in->img.plane[1]+i) = *(data +y_len + i*2 +1);
+        //v 数据 参考yuv彩色表
+        *(pic_in->img.plane[2]+i) = *(data+y_len+i*2);
+    }
+    //通过H.264编码得到NAL数组
+    x264_nal_t *nal = 0 ;
+    int pi_nal;
+    x264_picture_t pic_out;
+    //进行编码
+    int ret = x264_encoder_encode(videoEncoder,&nal,&pi_nal,pic_in,&pic_out);
+    if(ret < 0){
+        LOGE("x264编码失败");
+        pthread_mutex_unlock(&mutex);
+        return;
+    }
+    //sps pps
+    int sps_len,pps_len;
+    uint8_t sps[100];
+    uint8_t pps[100];
+    pic_in->i_pts += 1;
+    for (int i = 0; i < pi_nal; ++i) {
+        if(nal[i].i_type == NAL_SPS){
+            sps_len = nal[i].i_payload - 4;//去掉起始码 是否需要判断-3？
+            memcpy(sps,nal[i].p_payload+4,sps_len);
+        }else if(nal[i].i_type ==NAL_PPS){
+            pps_len = nal[i].i_payload - 4;//去掉起始码
+            memcpy(pps,nal[i].p_payload + 4,pps_len);
+            //pps是跟在sps后面，这里达到pps表示前面sps肯定已经拿到了
+            sendSpsPps(sps,pps,sps_len,pps_len);
+        }else{
+            //帧类型
+            sendFrame(nal[i].i_type,nal[i].i_payload,nal[i].p_payload);
+        }
+    }
 
+    pthread_mutex_unlock(&mutex);
+}
+/**
+ * 发送sps pps包
+ * @param sps
+ * @param pps
+ * @param len
+ * @param ppsLen
+ */
+void VideoChannel::sendSpsPps(uint8_t *sps, uint8_t *pps, int sps_len, int pps_len) {
+    RTMPPacket *packet = new RTMPPacket;
+    //参考RTMPDump与X264.md的表
+    int body_size = 5 + 8 +sps_len + 3+ pps_len;
+
+    RTMPPacket_Alloc(packet,body_size);
+    int i = 0;
+    packet->m_body[i++] = 0x17;
+
+    packet->m_body[i++] = 0x00;
+    packet->m_body[i++] = 0x00;
+    packet->m_body[i++] = 0x00;
+    packet->m_body[i++] = 0x00;
+
+    packet->m_body[i++] = 0x01;
+    packet->m_body[i++] = sps[1];
+    packet->m_body[i++] = sps[2];
+    packet->m_body[i++] = sps[3];
+
+    packet->m_body[i++] = 0xFF;
+    packet->m_body[i++] = 0xE1;
+
+    packet->m_body[i++] = (sps_len >> 8)& 0xFF;//?
+    packet->m_body[i++] = sps_len & 0xFF;//?
+
+    memcpy(&packet->m_body[i],sps,sps_len);
+
+    i+=sps_len;//拷贝完sps数据 ，i移位
+    packet->m_body[i++] =0x01;
+    packet->m_body[i++] = (pps_len >> 8)& 0xFF;//?
+    packet->m_body[i++] = pps_len & 0xFF;//?
+
+    memcpy(&packet->m_body[i],pps,pps_len);
+    i+=pps_len;//拷贝完sps数据 ，i移位
+    //包类型
+    packet->m_packetType = RTMP_PACKET_TYPE_VIDEO;
+    packet->m_nBodySize = body_size;
+    packet->m_nChannel = 10;
+    packet->m_nTimeStamp = 0;//sps pps包 没有时间戳
+    packet->m_hasAbsTimestamp = 0 ;
+    packet->m_headerType = RTMP_PACKET_SIZE_MEDIUM;
+    //把数据包放入队列
+    videoCallback(packet);
+}
+/**
+ * 发送帧数据
+ * @param type
+ * @param payload
+ * @param pPayload
+ */
+void VideoChannel::sendFrame(int type, int payload, uint8_t *pPayload) {
+//   去掉起始码 00 00 00 01 或者 00 00 01
+    if(pPayload[2] ==0x00){
+        pPayload += 4;
+        payload -= 4;
+    }else if(pPayload[2]==0x01){
+        pPayload += 3;
+        payload -= 3;
+    }
+
+    RTMPPacket *packet = new RTMPPacket;
+    int body_size = 5 + 4 +payload;//参考图表
+    RTMPPacket_Alloc(packet,body_size);
+    packet->m_body[0] = 0x27;//非关键帧
+    if(type == NAL_SLICE_IDR){
+        packet->m_body[0] = 0x17;//关键帧
+    }
+    packet->m_body[1] = 0x01;
+    packet->m_body[2] = 0x00;
+    packet->m_body[3] = 0x00;
+    packet->m_body[4] = 0x00;
+
+    packet->m_body[5] = (payload >> 24) & 0xFF;
+    packet->m_body[6] = (payload >> 16) & 0xFF;
+    packet->m_body[7] = (payload >> 8) & 0xFF;
+    packet->m_body[8] = payload & 0xFF;
+
+    memcpy(&packet->m_body[9], pPayload, payload);
+    packet->m_packetType = RTMP_PACKET_TYPE_VIDEO;//包类型
+    packet->m_nBodySize = body_size;
+    packet->m_nChannel = 10;
+    packet->m_nTimeStamp = -1;//外部设置时间
+    packet->m_hasAbsTimestamp = 0;
+    packet->m_headerType = RTMP_PACKET_SIZE_LARGE;
+    //把数据包放入队列
+    videoCallback(packet);
 }

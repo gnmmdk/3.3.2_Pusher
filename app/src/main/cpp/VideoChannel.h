@@ -33,6 +33,10 @@ private:
     int uv_len;
     x264_picture_t *pic_in = 0;
     x264_t * videoEncoder = 0 ;
+
+    void sendSpsPps(uint8_t *sps, uint8_t *pps, int len, int ppsLen);
+
+    void sendFrame(int type, int payload, uint8_t *pPayload);
 };
 
 
