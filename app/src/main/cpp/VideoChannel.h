@@ -8,6 +8,7 @@
 #include <pthread.h>
 #include <rtmp.h>
 #include <x264.h>
+#include "macro.h"
 
 class VideoChannel {
 typedef void (*VideoCallback)(RTMPPacket *packet);
@@ -19,6 +20,8 @@ public:
 
     void initVideoEncoder(int width, int height, int fps, int bitrate);
 
+    void encodeData(int8_t *data);
+
 private:
     pthread_mutex_t mutex;
     VideoCallback  videoCallback;
@@ -28,6 +31,8 @@ private:
     int mBitrate;
     int y_len;
     int uv_len;
+    x264_picture_t *pic_in = 0;
+    x264_t * videoEncoder = 0 ;
 };
 
 
