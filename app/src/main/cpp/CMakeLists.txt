@@ -15,4 +15,5 @@ add_library(
 target_link_libraries(
         native-lib
         rtmp
+        x264
         log)
