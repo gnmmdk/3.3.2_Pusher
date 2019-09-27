@@ -33,6 +33,16 @@ void VideoChannel::initVideoEncoder(int width, int height, int fps, int bitrate)
     mBitrate = bitrate;
     y_len = width * height;
     uv_len = y_len/4;
+
+    if(videoEncoder){
+        x264_encoder_close(videoEncoder);
+        videoEncoder = 0 ;
+    }
+    if(pic_in)
+    {
+        x264_picture_clean(pic_in);
+        DELETE(pic_in);
+    }
     //初始化x264编码器
     x264_param_t param;
     //ultrafast 最快 x264_preset_names[0]
