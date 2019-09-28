@@ -104,14 +104,18 @@ void* task_start(void* args){
             packet->m_nInfoField2 = rtmp->m_stream_id;
             //将true放入队列
             ret = RTMP_SendPacket(rtmp,packet,1);
+            releasePackets(&packet);
             if(!ret){
                 LOGE("rtmp 断开");
                 break;
             }
-            releasePackets(&packet);
         }
+        releasePackets(&packet);
     }while(0);
     isStart = 0;
+    readyPushing = 0 ;
+    packets.setWork(0);
+    packets.clear();
     //释放rtmp
     if(rtmp){
         RTMP_Close(rtmp);
