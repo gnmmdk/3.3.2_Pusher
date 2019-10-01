@@ -43,7 +43,7 @@ public class CameraHelper implements SurfaceHolder.Callback, Camera.PreviewCallb
         startpreview();
     }
 
-    private void stopPreview() {
+    public void stopPreview() {
         if(mCamera!=null){
             mCamera.setPreviewCallback(null);
             mCamera.stopPreview();

@@ -14,6 +14,7 @@ public class NEPusher {
     public NEPusher(Activity activity, int cameraId, int width, int height, int fps, int bitrate) {
         native_init();
         videoChannel = new VideoChannel(this, activity, cameraId, width, height, fps, bitrate);
+        audioChannel = new AudioChannel(this);
     }
 
     public void setPreviewDisplay(SurfaceHolder holder) {
@@ -28,13 +29,24 @@ public class NEPusher {
     public void startLive(String path) {
         native_start(path);
         videoChannel.startLive();
-//        audioChannel.startLive();
+        audioChannel.startLive();
     }
 
     public void stopLive() {
         videoChannel.stopLive();
-//        audioChannel.stopLive();
+        audioChannel.stopLive();
         native_stop();
+    }
+
+    public void release() {
+        videoChannel.release();
+        audioChannel.release();
+        native_release();
+    }
+
+
+    public int getInputSames() {
+        return native_getInputSamples();
     }
 
 
@@ -59,5 +71,12 @@ public class NEPusher {
 
     public native void native_pushVideo(byte[] data);
 
+    private native void native_release();
+
+    public native void native_initAudioEncoder(int sampleRate, int numChannels) ;
+
+    private native int native_getInputSamples() ;
+
+    public native void native_pushAudio(byte[] bytes) ;
 }
 

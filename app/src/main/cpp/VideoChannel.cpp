@@ -123,6 +123,14 @@ void VideoChannel::encodeData(int8_t *data) {
     pic_in->i_pts += 1;
     for (int i = 0; i < pi_nal; ++i) {
         if(nal[i].i_type == NAL_SPS){
+            //   去掉起始码 00 00 00 01 或者 00 00 01 TODO
+//            if(pPayload[2] ==0x00){
+//                pPayload += 4;
+//                payload -= 4;
+//            }else if(pPayload[2]==0x01){
+//                pPayload += 3;
+//                payload -= 3;
+//            }
             sps_len = nal[i].i_payload - 4;//去掉起始码 是否需要判断-3？
             memcpy(sps,nal[i].p_payload+4,sps_len);
         }else if(nal[i].i_type ==NAL_PPS){

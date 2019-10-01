@@ -49,4 +49,8 @@ public class VideoChannel implements Camera.PreviewCallback,CameraHelper.OnChang
     public void onChanged(int width, int height) {
         mPusher.native_initVideoEncoder(width,height,mFps,bitrate);
     }
+
+    public void release() {
+        cameraHelper.stopPreview();
+    }
 }

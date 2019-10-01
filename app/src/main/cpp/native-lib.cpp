@@ -7,9 +7,11 @@
 #include <x264.h>
 #include <rtmp.h>
 #include "VideoChannel.h"
+#include "AudioChannel.h"
 //}
 
 VideoChannel *videoChannel = 0;
+AudioChannel *audioChannel = 0;
 SafeQueue<RTMPPacket *> packets;
 uint32_t start_time;
 bool isStart;
@@ -50,7 +52,9 @@ JNIEXPORT void JNICALL
 Java_com_kangjj_pusher_NEPusher_native_1init(JNIEnv *env, jobject thiz) {
     //准备编码器进行编码 工具类VideoChannel
     videoChannel = new VideoChannel;
+    audioChannel = new AudioChannel;
     videoChannel->setVideoCallback(callback);
+    audioChannel->setAudioCallback(callback);
     packets.setReleaseCallback(releasePackets);
 }
 
@@ -89,6 +93,7 @@ void* task_start(void* args){
         start_time = RTMP_GetTime();
         //后面要对安全队列进行取数据的操作
         packets.setWork(1);
+        callback(audioChannel->getAudioSeqHeader());// 经过测试可以不发序列头信息
         RTMPPacket * packet = 0;
         //循环从队列中取数据（rtmp包），然后发送
         while (readyPushing){
@@ -169,4 +174,36 @@ Java_com_kangjj_pusher_NEPusher_native_1stop(JNIEnv *env, jobject thiz) {
     readyPushing = 0;
     packets.setWork(0);
     pthread_join(pid_start,0);
+}
+extern "C"
+JNIEXPORT void JNICALL
+Java_com_kangjj_pusher_NEPusher_native_1release(JNIEnv *env, jobject thiz) {
+    DELETE(videoChannel);
+    DELETE(audioChannel);
+}
+extern "C"
+JNIEXPORT void JNICALL
+Java_com_kangjj_pusher_NEPusher_native_1initAudioEncoder(JNIEnv *env, jobject thiz,
+                                                         jint sample_rate, jint num_channels) {
+    if(audioChannel){
+        audioChannel->initAudioEncoder(sample_rate,num_channels);
+    }
+}
+extern "C"
+JNIEXPORT jint JNICALL
+Java_com_kangjj_pusher_NEPusher_native_1getInputSamples(JNIEnv *env, jobject thiz) {
+    if(audioChannel){
+        return audioChannel->getInputSamples();
+    }
+    return -1;
+}
+extern "C"
+JNIEXPORT void JNICALL
+Java_com_kangjj_pusher_NEPusher_native_1pushAudio(JNIEnv *env, jobject thiz, jbyteArray data_) {
+    if(!audioChannel || !readyPushing){
+        return;
+    }
+    jbyte *data = env->GetByteArrayElements(data_,NULL);
+    audioChannel->encodeData(data);
+    env->ReleaseByteArrayElements(data_,data,0);
 }

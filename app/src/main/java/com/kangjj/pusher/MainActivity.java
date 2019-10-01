@@ -34,4 +34,10 @@ public class MainActivity extends AppCompatActivity {
     public void stopLive(View view) {
         pusher.stopLive();
     }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        pusher.release();
+    }
 }
