@@ -95,7 +95,7 @@ void VideoChannel::initVideoEncoder(int width, int height, int fps, int bitrate)
 
     pthread_mutex_unlock(&mutex);
 }
-//todo A.4 NV21转I420(这两个都属于YUV420格式)，然后进行编码
+//todo A.4 NV21转I420(这两个都属于YUV420格式)，然后进行编码  Java_com_kangjj_pusher_NEPusher_native_1pushVideo调用进来。
 void VideoChannel::encodeData(int8_t *data) {
     pthread_mutex_lock(&mutex);
     //todo A.4.1 NV21转I420
