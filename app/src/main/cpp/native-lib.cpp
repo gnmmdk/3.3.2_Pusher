@@ -94,7 +94,7 @@ void* task_start(void* args){
         start_time = RTMP_GetTime();
         //后面要对安全队列进行取数据的操作
         packets.setWork(1);
-        callback(audioChannel->getAudioSeqHeader());// 经过测试可以不发序列头信息
+        callback(audioChannel->getAudioSeqHeader());// todo 发送序列头信息 （经过测试可以不发序列头信息）
         RTMPPacket * packet = 0;
         //todo A.2.5 循环从队列中取数据（rtmp包），然后发送
         while (readyPushing){
