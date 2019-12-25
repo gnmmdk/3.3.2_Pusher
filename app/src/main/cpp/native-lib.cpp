@@ -43,45 +43,46 @@ Java_com_kangjj_pusher_MainActivity_stringFromJNI(
     char version[50];
     sprintf(version,"librtmp version:%d",RTMP_LibVersion());
 //    return env->NewStringUTF(hello.c_str());
-    x264_picture_t* picture = new x264_picture_t;
+    x264_picture_t* picture = new x264_picture_t;//这里是错误的验证方式  只有定义 没有调用到实现方法
     return env->NewStringUTF(version);
 }
 
 extern "C"
 JNIEXPORT void JNICALL
 Java_com_kangjj_pusher_NEPusher_native_1init(JNIEnv *env, jobject thiz) {
-    //准备编码器进行编码 工具类VideoChannel
+    //todo A.1.1准备编码器进行编码 工具类VideoChannel
     videoChannel = new VideoChannel;
     audioChannel = new AudioChannel;
     videoChannel->setVideoCallback(callback);
     audioChannel->setAudioCallback(callback);
+    //todo A.1.2 准备一个安全队列，把数据放到队列，在统一的线程当中取出数据 再发送给服务器
     packets.setReleaseCallback(releasePackets);
 }
-
+//todo A.2 在子线程发送数据
 void* task_start(void* args){
     char * url = static_cast<char *>(args);
     RTMP *rtmp = 0;
     int ret;
     do{
-        //1.1 rtmp 初始化
+        //todo A.2.1.1 rtmp 初始化
         rtmp= RTMP_Alloc();
         if(!rtmp){
             LOGE("rtmp 初始化失败");
             break;
         }
-        //1.2 rtmp初始化
+        //todo A.2.1.2 rtmp初始化
         RTMP_Init(rtmp);
         //设置连接的超时时间
         rtmp->Link.timeout = 5;
-        //2 设置流媒体地址
+        //todo A.2.2 设置流媒体地址
         ret = RTMP_SetupURL(rtmp,url);
         if(!ret){
             LOGE("rtmp 设置流媒体地址失败");
             break;
         }
-        //3 开始输出模式
+        //todo A.2.3 开始输出模式
         RTMP_EnableWrite(rtmp);
-        //4 建立连接
+        //todo A.2.4 建立连接
         ret = RTMP_Connect(rtmp,0);
         if(!ret){
             LOGE("rtmp 建立连接失败:%d, url: %s", ret, url);
@@ -95,7 +96,7 @@ void* task_start(void* args){
         packets.setWork(1);
         callback(audioChannel->getAudioSeqHeader());// 经过测试可以不发序列头信息
         RTMPPacket * packet = 0;
-        //循环从队列中取数据（rtmp包），然后发送
+        //todo A.2.5 循环从队列中取数据（rtmp包），然后发送
         while (readyPushing){
             packets.pop(packet);
             if(!readyPushing){
@@ -105,9 +106,9 @@ void* task_start(void* args){
                 continue;
             }
             //成功取到数据包，发送
-            //给一个rtmp的流id
+            //todo A.2.5.1 给一个rtmp的流id
             packet->m_nInfoField2 = rtmp->m_stream_id;
-            //将true放入队列
+            //todo A.2.5.2 将true放入队列
             ret = RTMP_SendPacket(rtmp,packet,1);
             releasePackets(&packet);
             if(!ret){
@@ -117,6 +118,7 @@ void* task_start(void* args){
         }
         releasePackets(&packet);
     }while(0);
+    //todo A.2.6 结束释放资源
     isStart = 0;
     readyPushing = 0 ;
     packets.setWork(0);
@@ -130,6 +132,7 @@ void* task_start(void* args){
     return 0;
 }
 
+//todo A.3 java代码 CameraHelper.startpreview -> mOnChangedSizeListener.onChanged -> mPusher.native_initVideoEncoder
 extern "C"
 JNIEXPORT void JNICALL
 Java_com_kangjj_pusher_NEPusher_native_1initVideoEncoder(JNIEnv *env, jobject thiz, jint width,
